@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // Generates secure defaults for JWT_SECRET and TOKEN_ENCRYPTION_KEY so a
 // fresh clone never runs with replace-me placeholders. Idempotent — if .env
 // already exists, we only fill in blank secret slots. Assumes invocation
-// from the repo root (which `npm run bootstrap` guarantees).
+// from the repo root (which `pnpm run bootstrap` guarantees).
 const ROOT = process.cwd();
 const EXAMPLE = resolve(ROOT, ".env.example");
 const TARGET = resolve(ROOT, ".env");

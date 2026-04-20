@@ -1,16 +1,18 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
-RUN npx tsc
+RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm exec tsc
 
 FROM node:20-alpine AS runtime
 WORKDIR /app

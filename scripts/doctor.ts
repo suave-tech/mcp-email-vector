@@ -32,7 +32,7 @@ const checks: Check[] = [
       );
       const names = new Set(rows.map((r) => r.table_name));
       for (const t of ["users", "accounts", "sync_jobs", "sync_log", "user_quota"]) {
-        if (!names.has(t)) throw new Error(`missing table '${t}' — run npm run db:migrate`);
+        if (!names.has(t)) throw new Error(`missing table '${t}' — run pnpm run db:migrate`);
       }
       return `${names.size} tables`;
     },

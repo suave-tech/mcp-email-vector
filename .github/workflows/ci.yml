@@ -11,22 +11,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install root deps
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Biome (lint + format + organize-imports)
-        run: npm run check
+        run: pnpm run check
 
       - name: Typecheck (root)
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Tests
-        run: npm test
+        run: pnpm test
 
   mcp:
     runs-on: ubuntu-latest
@@ -36,17 +40,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: mcp/package-lock.json
+          cache: pnpm
+          cache-dependency-path: mcp/pnpm-lock.yaml
 
       - name: Install MCP deps
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck MCP
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Build MCP
-        run: npm run build
+        run: pnpm run build

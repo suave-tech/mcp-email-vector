@@ -1,40 +1,63 @@
 import { sign } from "../src/auth/jwt.js";
 import { pool, query } from "../src/db/client.js";
 
-const args = process.argv.slice(2);
-const cleanup = args.includes("--cleanup");
-const email = args.find((a) => !a.startsWith("--"));
-
-if (!email || !/.+@.+\..+/.test(email)) {
-  console.error("usage: npm run create-user -- <email> [--cleanup]");
-  process.exit(1);
+export interface CreateUserResult {
+  userId: string;
+  token: string;
+  oauthUrl: string;
+  created: boolean;
 }
 
-try {
+export async function createUser(
+  email: string,
+  opts: { cleanup?: boolean; apiUrl?: string } = {},
+): Promise<CreateUserResult> {
+  if (!/.+@.+\..+/.test(email)) throw new Error(`invalid email: ${email}`);
   const existing = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [email]);
   let userId = existing[0]?.id;
-  if (userId) {
-    console.error(`User already exists: ${email} (${userId})`);
-  } else {
+  let created = false;
+  if (!userId) {
     const inserted = await query<{ id: string }>("INSERT INTO users (email) VALUES ($1) RETURNING id", [
       email,
     ]);
     userId = inserted[0]!.id;
-    console.error(`Created user: ${email} (${userId})`);
+    created = true;
   }
   const token = sign(userId);
-  console.error("JWT (7-day expiry):");
-  process.stdout.write(`${token}\n`);
+  const base = opts.apiUrl ?? process.env.API_URL ?? "http://localhost:3000";
+  const cleanupQs = opts.cleanup ? "&cleanup=true" : "";
+  const oauthUrl = `${base}/api/oauth/google/start?token=${token}${cleanupQs}`;
+  return { userId, token, oauthUrl, created };
+}
 
-  const base = process.env.API_URL ?? "http://localhost:3000";
-  const cleanupQs = cleanup ? "&cleanup=true" : "";
-  console.error("");
-  console.error("Connect Gmail:");
-  console.error(`  ${base}/api/oauth/google/start?token=${token}${cleanupQs}`);
-  if (cleanup) {
-    console.error("  (requests gmail.modify — required for /api/cleanup)");
-    console.error("  (set ENABLE_INBOX_CLEANUP=true in the server env)");
+// CLI entrypoint — kept so `pnpm run create-user -- <email>` still works.
+// The wizard imports createUser() directly instead of spawning tsx.
+const isCli = import.meta.url === `file://${process.argv[1]}`;
+if (isCli) {
+  const args = process.argv.slice(2);
+  const cleanup = args.includes("--cleanup");
+  const email = args.find((a) => !a.startsWith("--"));
+
+  if (!email) {
+    console.error("usage: pnpm run create-user -- <email> [--cleanup]");
+    process.exit(1);
   }
-} finally {
-  await pool.end();
+
+  try {
+    const { userId, token, oauthUrl, created } = await createUser(email, { cleanup });
+    console.error(
+      created ? `Created user: ${email} (${userId})` : `User already exists: ${email} (${userId})`,
+    );
+    console.error("JWT (7-day expiry):");
+    process.stdout.write(`${token}\n`);
+    console.error("");
+    console.error("Connect Gmail:");
+    console.error(`  ${oauthUrl}`);
+    if (cleanup) {
+      console.error("  (requests gmail.modify — required for /api/cleanup)");
+      console.error("  (set ENABLE_INBOX_CLEANUP=true in the server env)");
+    }
+  } finally {
+    await pool.end();
+  }
 }

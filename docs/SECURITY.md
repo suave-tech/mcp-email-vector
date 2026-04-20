@@ -27,7 +27,7 @@ Out of scope:
 ## What this project handles that you should know about
 
 - **OAuth refresh tokens for Gmail/Outlook** — encrypted at rest with AES-256-GCM using `TOKEN_ENCRYPTION_KEY`. If that key leaks, every stored refresh token is compromised.
-- **Long-lived JWTs** — minted via `npm run mint-token` for the MCP integration. Treat them like passwords.
+- **Long-lived JWTs** — minted via `pnpm run mint-token` for the MCP integration. Treat them like passwords.
 - **Per-user namespace isolation** — enforced server-side from the JWT `sub`, never from request bodies. Any path that lets a user influence the namespace is a high-severity bug.
 - **Raw email text is never persisted** in Postgres — only metadata + the vector in Pinecone. A bug that writes raw bodies to the DB or logs is a bug.
 

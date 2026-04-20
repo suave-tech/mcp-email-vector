@@ -30,9 +30,22 @@ Roughly 15–20 minutes to provision the external accounts the first time. Every
 ## Quick start
 
 ```bash
+pnpm install
+pnpm setup
+```
+
+`pnpm setup` is an interactive wizard that walks you through the whole flow — preflight checks, generating secrets, validating API keys as you paste them, booting Docker, running the doctor health check, creating your user, opening the Google consent screen in your browser, waiting for the connection to complete, building the MCP server, and (optionally) registering it with Claude Code. Re-running it is safe: anything already configured is skipped.
+
+Initial sync kicks off automatically after you connect — watch `docker compose logs -f worker` to see progress.
+
+### Manual setup (advanced)
+
+If you'd rather drive each step yourself:
+
+```bash
 # 1. Generate secrets and scaffold .env from .env.example
-npm install           # once, so tsx is available
-npm run bootstrap     # fills JWT_SECRET and TOKEN_ENCRYPTION_KEY with fresh random values
+pnpm install           # once, so tsx is available
+pnpm run bootstrap     # fills JWT_SECRET and TOKEN_ENCRYPTION_KEY with fresh random values
 
 # 2. Open .env and paste in the provider keys:
 #    OPENAI_API_KEY, PINECONE_API_KEY, ANTHROPIC_API_KEY,
@@ -43,17 +56,14 @@ npm run bootstrap     # fills JWT_SECRET and TOKEN_ENCRYPTION_KEY with fresh ran
 docker compose up -d --build
 
 # 4. Verify every dependency is reachable before connecting an account
-docker compose run --rm api npm run doctor
+pnpm run doctor
 # → green ticks for postgres, redis, openai, anthropic, pinecone, google.
-#   Fix anything red here rather than debugging failed syncs later.
 
 # 5. Create your user — the command prints the Gmail connect URL
-docker compose run --rm api npm run create-user -- you@example.com
+pnpm run create-user -- you@example.com
 # → JWT + OAuth URL. Open the URL in your browser to connect Gmail.
 #   Save the JWT as EMAIL_API_TOKEN for the MCP step below.
 ```
-
-Initial sync kicks off automatically — watch `docker compose logs -f worker` to see progress.
 
 To check sync progress:
 
@@ -72,7 +82,7 @@ curl -X POST http://localhost:3000/api/search \
 
 ## Setting up Google OAuth
 
-First-time setup in Google Cloud. If `google: oauth client id present` is green in `npm run doctor` you can skip this.
+First-time setup in Google Cloud. If `google: oauth client id present` is green in `pnpm run doctor` you can skip this.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com), create a new project (or pick an existing one).
 2. **APIs & Services → Library** → search for **Gmail API** → **Enable**.
@@ -86,17 +96,17 @@ First-time setup in Google Cloud. If `google: oauth client id present` is green 
    - **Authorized redirect URIs**: `http://localhost:3000/api/oauth/google/callback`
 5. Copy the **Client ID** and **Client Secret** into `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
 
-**Troubleshooting:** if the OAuth flow returns `access_denied`, double-check that your Gmail address is listed as a test user and that the consent screen's scope list includes every scope the app requests. Re-running `npm run create-user -- --cleanup` after adding `gmail.modify` is enough — no server restart needed.
+**Troubleshooting:** if the OAuth flow returns `access_denied`, double-check that your Gmail address is listed as a test user and that the consent screen's scope list includes every scope the app requests. Re-running `pnpm run create-user -- --cleanup` after adding `gmail.modify` is enough — no server restart needed.
 
 ## Local development (without Docker)
 
 ```bash
 docker compose up -d postgres redis     # just the data stores
-npm install
-npm run db:migrate
-npm run dev                              # terminal 1: api
-npm run worker                           # terminal 2: bullmq worker
-npm run scheduler                        # terminal 3: hourly poller
+pnpm install
+pnpm run db:migrate
+pnpm run dev                             # terminal 1: api
+pnpm run worker                          # terminal 2: bullmq worker
+pnpm run scheduler                       # terminal 3: hourly poller
 ```
 
 ## Stack
@@ -148,7 +158,7 @@ Off by default — if you only want search, you'll never see this feature and no
 3. Connect Gmail with the `--cleanup` flag so the OAuth flow requests `gmail.modify` instead of read-only:
 
    ```bash
-   docker compose run --rm api npm run create-user -- you@example.com --cleanup
+   pnpm run create-user -- you@example.com --cleanup
    # → prints the Gmail connect URL with ?cleanup=true appended
    ```
 
@@ -185,12 +195,14 @@ Messages go to **Trash** (reversible for ~30 days via Gmail), not permanently de
 
 A standalone MCP server in [mcp/](mcp/) exposes three tools — `search_email`, `list_email_accounts`, `get_account_sync_status` — so Claude Code can query your inbox directly.
 
+`pnpm setup` builds this automatically and prints a ready-to-paste `claude mcp add` command at the end. To do it by hand:
+
 ```bash
 # 1. Build the MCP server
-cd mcp && npm install && npm run build && cd ..
+cd mcp && pnpm install && pnpm run build && cd ..
 
 # 2. Mint a token (skip if you saved one from `create-user`)
-npm run mint-token <your-user-uuid>
+pnpm run mint-token <your-user-uuid>
 
 # 3. Register with Claude Code
 claude mcp add sts-vector-email \
@@ -204,16 +216,16 @@ Restart your Claude session and the tools appear as `mcp__sts-vector-email__sear
 ## Quality gates
 
 - **Biome** — lint + format + organize-imports. Config in [biome.json](biome.json).
-- **Lefthook** — runs Biome + typecheck on commit, full check + tests on push. Installed automatically by `npm install` (via the `prepare` script). Config in [lefthook.yml](lefthook.yml).
+- **Lefthook** — runs Biome + typecheck on commit, full check + tests on push. Installed automatically by `pnpm install` (via the `prepare` script). Config in [lefthook.yml](lefthook.yml).
 - **Vitest** — unit tests in [tests/](tests/). Env is faked in [tests/setup.ts](tests/setup.ts) so the Zod env schema doesn't need real secrets.
 - **GitHub Actions** — same checks run on every PR ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
 | Command | What it does |
 |---|---|
-| `npm test` | Vitest once (CI + pre-push) |
-| `npm run check` | Biome lint + format + organize-imports (no writes) |
-| `npm run check:fix` | Same, but auto-fixes |
-| `npm run typecheck` | `tsc --noEmit` |
+| `pnpm test` | Vitest once (CI + pre-push) |
+| `pnpm run check` | Biome lint + format + organize-imports (no writes) |
+| `pnpm run check:fix` | Same, but auto-fixes |
+| `pnpm run typecheck` | `tsc --noEmit` |
 
 Escape hatch: `LEFTHOOK=0 git commit ...` skips the hooks. Don't rely on this — CI runs the same checks.
 

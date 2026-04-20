@@ -5,10 +5,10 @@ Thanks for your interest. This is a small project — issues and PRs are welcome
 ## Before you open a PR
 
 1. Fork and branch from `main`.
-2. `npm install` (this also installs the lefthook git hooks via the `prepare` script).
+2. `pnpm install` (this also installs the lefthook git hooks via the `prepare` script). For a fresh end-to-end dev environment with Docker + a connected Gmail, `pnpm setup` runs the full interactive wizard.
 3. Make your changes. Local hooks will run on commit/push:
-   - **pre-commit**: Biome (lint + format + organize-imports) on staged files, plus `npm run typecheck` if any `.ts` file changed.
-   - **pre-push**: full `typecheck`, `npm test`, and `npm run check`.
+   - **pre-commit**: Biome (lint + format + organize-imports) on staged files, plus `pnpm run typecheck` if any `.ts` file changed.
+   - **pre-push**: full `typecheck`, `pnpm test`, and `pnpm run check`.
 4. CI runs the same three checks on every PR — if it's green locally it should be green in CI.
 
 ## What I'm looking for

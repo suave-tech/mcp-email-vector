@@ -1,4 +1,4 @@
-# Lefthook config — installed on `npm install` via the "prepare" script.
+# Lefthook config — installed on `pnpm install` via the "prepare" script.
 # Hooks block the commit/push on non-zero exit. Override with LEFTHOOK=0 (emergency only).
 
 pre-commit:
@@ -7,22 +7,22 @@ pre-commit:
     biome:
       # Format + lint + organize-imports, auto-fix safe issues, re-stage.
       glob: "*.{ts,js,json}"
-      run: npx biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      run: pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
       stage_fixed: true
 
     typecheck:
       # Only run if TS files changed. tsc is project-wide (no per-file mode).
       glob: "*.ts"
-      run: npm run typecheck
+      run: pnpm run typecheck
 
 pre-push:
   parallel: false
   commands:
     typecheck:
-      run: npm run typecheck
+      run: pnpm run typecheck
     test:
-      run: npm test
+      run: pnpm test
     lint:
-      run: npm run check
+      run: pnpm run check
 
 # Skip hooks by setting LEFTHOOK=0 or passing --no-verify. Do not do this casually.
