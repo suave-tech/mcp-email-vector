@@ -1,0 +1,57 @@
+{
+  "name": "sts-project-vector-email",
+  "version": "0.1.0",
+  "description": "Multi-account email vector database with natural-language search",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "worker": "tsx src/queue/worker.ts",
+    "scheduler": "tsx src/queue/scheduler.ts",
+    "db:migrate": "psql $DATABASE_URL -f src/db/schema.sql",
+    "mint-token": "tsx scripts/mint-token.ts",
+    "create-user": "tsx scripts/create-user.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome lint src tests",
+    "format": "biome format --write src tests",
+    "check": "biome check src tests",
+    "check:fix": "biome check --write src tests",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@azure/msal-node": "^2.16.0",
+    "@pinecone-database/pinecone": "^4.0.0",
+    "bullmq": "^5.25.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "googleapis": "^144.0.0",
+    "html-to-text": "^9.0.5",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.73.0",
+    "pg": "^8.13.1",
+    "uuid": "^11.0.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/express": "^5.0.0",
+    "@types/html-to-text": "^9.0.4",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.9.0",
+    "@types/pg": "^8.11.10",
+    "@types/uuid": "^10.0.0",
+    "lefthook": "^1.8.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
