@@ -1,5 +1,5 @@
-import { pool, query } from "../src/db/client.js";
 import { sign } from "../src/auth/jwt.js";
+import { pool, query } from "../src/db/client.js";
 
 const args = process.argv.slice(2);
 const cleanup = args.includes("--cleanup");
@@ -16,10 +16,9 @@ try {
   if (userId) {
     console.error(`User already exists: ${email} (${userId})`);
   } else {
-    const inserted = await query<{ id: string }>(
-      "INSERT INTO users (email) VALUES ($1) RETURNING id",
-      [email],
-    );
+    const inserted = await query<{ id: string }>("INSERT INTO users (email) VALUES ($1) RETURNING id", [
+      email,
+    ]);
     userId = inserted[0]!.id;
     console.error(`Created user: ${email} (${userId})`);
   }

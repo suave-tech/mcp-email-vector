@@ -21,31 +21,39 @@ If you need anything in the ❌ / 🚧 column, see [CONTRIBUTING.md](./CONTRIBUT
 
 ## What you'll need before starting
 
-- Node 20+ and Docker
-- A Google Cloud project with the **Gmail API** enabled and an OAuth 2.0 Web client
+- **Node 20+** and **Docker**
+- **Google Cloud project** with the Gmail API enabled and an OAuth 2.0 Web client — see [Setting up Google OAuth](#setting-up-google-oauth)
 - API keys for: **OpenAI** (embeddings), **Pinecone** (vector store, free tier works), **Anthropic** (grounded answers)
 
-Roughly 15–20 minutes to provision the external accounts the first time.
+Roughly 15–20 minutes to provision the external accounts the first time. Everything after that is one command.
 
 ## Quick start
 
 ```bash
-# 1. Configure
-cp .env.example .env
-# Fill in the keys above. Generate TOKEN_ENCRYPTION_KEY with:
-#   openssl rand -base64 32
+# 1. Generate secrets and scaffold .env from .env.example
+npm install           # once, so tsx is available
+npm run bootstrap     # fills JWT_SECRET and TOKEN_ENCRYPTION_KEY with fresh random values
 
-# 2. Boot everything (postgres, redis, api, worker, scheduler)
+# 2. Open .env and paste in the provider keys:
+#    OPENAI_API_KEY, PINECONE_API_KEY, ANTHROPIC_API_KEY,
+#    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+#    (see "Setting up Google OAuth" below if you haven't created the OAuth client yet)
+
+# 3. Boot everything (postgres, redis, migrate, api, worker, scheduler)
 docker compose up -d --build
 
-# 3. Create your user and mint a JWT
-docker compose run --rm api npm run create-user -- you@example.com
-# → prints a JWT to stdout. Save it as EMAIL_API_TOKEN for the MCP step below.
+# 4. Verify every dependency is reachable before connecting an account
+docker compose run --rm api npm run doctor
+# → green ticks for postgres, redis, openai, anthropic, pinecone, google.
+#   Fix anything red here rather than debugging failed syncs later.
 
-# 4. Connect your Gmail account in a browser:
-#    http://localhost:3000/api/oauth/google/start?token=<JWT>
-#    Initial sync runs automatically and shows up in the worker logs.
+# 5. Create your user — the command prints the Gmail connect URL
+docker compose run --rm api npm run create-user -- you@example.com
+# → JWT + OAuth URL. Open the URL in your browser to connect Gmail.
+#   Save the JWT as EMAIL_API_TOKEN for the MCP step below.
 ```
+
+Initial sync kicks off automatically — watch `docker compose logs -f worker` to see progress.
 
 To check sync progress:
 
@@ -61,6 +69,24 @@ curl -X POST http://localhost:3000/api/search \
   -H "Content-Type: application/json" \
   -d '{"query": "what did Sarah send about the budget?", "answer": true}'
 ```
+
+## Setting up Google OAuth
+
+First-time setup in Google Cloud. If `google: oauth client id present` is green in `npm run doctor` you can skip this.
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com), create a new project (or pick an existing one).
+2. **APIs & Services → Library** → search for **Gmail API** → **Enable**.
+3. **APIs & Services → OAuth consent screen** → choose **External** → fill in the app name and your email. Under **Scopes**, add:
+   - `https://www.googleapis.com/auth/gmail.readonly` (required)
+   - `https://www.googleapis.com/auth/gmail.modify` (**only if** you plan to enable inbox cleanup — see below)
+   - `https://www.googleapis.com/auth/userinfo.email` (required)
+
+   Add your own Gmail address as a **Test user** while the app is in testing mode. That's enough to use it yourself — you only need Google verification if you intend to let other people's accounts connect.
+4. **APIs & Services → Credentials → Create Credentials → OAuth client ID** → **Web application**.
+   - **Authorized redirect URIs**: `http://localhost:3000/api/oauth/google/callback`
+5. Copy the **Client ID** and **Client Secret** into `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+
+**Troubleshooting:** if the OAuth flow returns `access_denied`, double-check that your Gmail address is listed as a test user and that the consent screen's scope list includes every scope the app requests. Re-running `npm run create-user -- --cleanup` after adding `gmail.modify` is enough — no server restart needed.
 
 ## Local development (without Docker)
 
@@ -113,16 +139,20 @@ scripts/         Operational helpers (create-user, mint-token)
 
 ## Inbox cleanup (opt-in)
 
-Off by default — if you only want search, you'll never see this feature.
+Off by default — if you only want search, you'll never see this feature and no write scopes are requested.
 
-To enable, set `ENABLE_INBOX_CLEANUP=true` in the server env, then connect Gmail with the `--cleanup` flag so the OAuth flow requests `gmail.modify` instead of the default read-only scope:
+**To enable:**
 
-```bash
-docker compose run --rm api npm run create-user -- you@example.com --cleanup
-# → prints the Gmail connect URL with ?cleanup=true appended
-```
+1. Set `ENABLE_INBOX_CLEANUP=true` in `.env` and restart (`docker compose up -d`).
+2. Make sure your Google Cloud consent screen includes `https://www.googleapis.com/auth/gmail.modify` (see [Setting up Google OAuth](#setting-up-google-oauth) step 3).
+3. Connect Gmail with the `--cleanup` flag so the OAuth flow requests `gmail.modify` instead of read-only:
 
-Users who already connected without cleanup can re-run the start URL with `&cleanup=true` to upgrade the scope. Accounts that never granted `gmail.modify` get a 403 from the cleanup endpoints — belt-and-suspenders so a stale token can't be used destructively.
+   ```bash
+   docker compose run --rm api npm run create-user -- you@example.com --cleanup
+   # → prints the Gmail connect URL with ?cleanup=true appended
+   ```
+
+Users who already connected without cleanup can re-run the start URL with `&cleanup=true` to upgrade the scope — no account recreation needed. Accounts that never granted `gmail.modify` get a 403 from the cleanup endpoints even when the feature flag is on, so a stale token can't be used destructively.
 
 Preview before running (no writes, shows the translated Gmail query + a 20-message sample):
 
