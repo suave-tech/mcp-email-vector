@@ -1,7 +1,7 @@
 import { htmlToText } from "html-to-text";
-import { env } from "../config/env.js";
 import { EXCLUDED_OUTLOOK_FOLDERS } from "../config/constants.js";
-import type { EmailProvider, FetchOptions, FetchPage, NormalizedEmail } from "./types.js";
+import { env } from "../config/env.js";
+import type { EmailProvider, FetchPage, NormalizedEmail } from "./types.js";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
@@ -11,7 +11,8 @@ export const OutlookProvider: EmailProvider = {
   async fetchPage(accessToken, opts): Promise<FetchPage> {
     const params = new URLSearchParams({
       $top: String(opts.limit ?? 100),
-      $select: "id,internetMessageId,conversationId,from,toRecipients,subject,body,receivedDateTime,hasAttachments,parentFolderId",
+      $select:
+        "id,internetMessageId,conversationId,from,toRecipients,subject,body,receivedDateTime,hasAttachments,parentFolderId",
     });
     if (opts.since) params.set("$filter", `receivedDateTime ge ${opts.since.toISOString()}`);
     const url = opts.pageToken ?? `${GRAPH_BASE}/me/messages?${params}`;

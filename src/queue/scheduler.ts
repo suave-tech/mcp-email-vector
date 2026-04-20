@@ -1,5 +1,5 @@
-import { query } from "../db/client.js";
 import { POLL_INTERVAL_MS } from "../config/constants.js";
+import { query } from "../db/client.js";
 import { syncQueue } from "./queue.js";
 
 async function enqueueDueAccounts(): Promise<void> {

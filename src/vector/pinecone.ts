@@ -1,6 +1,6 @@
 import { Pinecone } from "@pinecone-database/pinecone";
-import { env } from "../config/env.js";
 import { namespaceFor } from "../config/constants.js";
+import { env } from "../config/env.js";
 
 const pc = new Pinecone({ apiKey: env.PINECONE_API_KEY });
 const index = pc.index(env.PINECONE_INDEX);

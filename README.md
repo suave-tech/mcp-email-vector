@@ -13,6 +13,7 @@ Full design rationale lives in [TECH-SPEC.md](./TECH-SPEC.md).
 | Generic IMAP | ❌ Not started |
 | Attachment indexing (PDFs, etc.) | ❌ Not started — text-only today |
 | GDPR erasure endpoint | 🚧 Helper exists, no route |
+| Inbox cleanup (opt-in, off by default) | ✅ Working ([see below](#inbox-cleanup-opt-in)) |
 | MCP server for Claude Code | ✅ Working ([mcp/](./mcp/)) |
 | Test coverage | ⚠️ Pure-logic units only; no integration tests |
 
@@ -109,6 +110,46 @@ scripts/         Operational helpers (create-user, mint-token)
 | Poll cadence | 60 min | `POLL_INTERVAL_MS` |
 | Initial-sync batch | 100 | `INITIAL_SYNC_BATCH` |
 | Default top-K | 10 | `DEFAULT_TOP_K` |
+
+## Inbox cleanup (opt-in)
+
+Off by default — if you only want search, you'll never see this feature.
+
+To enable, set `ENABLE_INBOX_CLEANUP=true` in the server env, then connect Gmail with the `--cleanup` flag so the OAuth flow requests `gmail.modify` instead of the default read-only scope:
+
+```bash
+docker compose run --rm api npm run create-user -- you@example.com --cleanup
+# → prints the Gmail connect URL with ?cleanup=true appended
+```
+
+Users who already connected without cleanup can re-run the start URL with `&cleanup=true` to upgrade the scope. Accounts that never granted `gmail.modify` get a 403 from the cleanup endpoints — belt-and-suspenders so a stale token can't be used destructively.
+
+Preview before running (no writes, shows the translated Gmail query + a 20-message sample):
+
+```bash
+curl -X POST http://localhost:3000/api/cleanup/preview \
+  -H "Authorization: Bearer $EMAIL_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "accountId": "<uuid>",
+    "rules": {
+      "labels": ["CATEGORY_PROMOTIONS"],
+      "hasUnsubscribe": true,
+      "olderThanDays": 30,
+      "keep": { "senders": ["boss@company.com"] },
+      "maxMessages": 200
+    }
+  }'
+```
+
+Then execute with `{"confirm": true}`:
+
+```bash
+curl -X POST http://localhost:3000/api/cleanup/run \
+  -H "Authorization: Bearer $EMAIL_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"accountId": "<uuid>", "confirm": true, "rules": { /* same */ }}'
+```
+
+Messages go to **Trash** (reversible for ~30 days via Gmail), not permanently deleted. Starred and Important messages are excluded automatically. Rule schema is in [src/cleanup/rules.ts](src/cleanup/rules.ts).
 
 ## MCP server (Claude Code integration)
 

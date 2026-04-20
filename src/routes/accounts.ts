@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth, type AuthedRequest } from "../auth/jwt.js";
+import { type AuthedRequest, requireAuth } from "../auth/jwt.js";
 import { query } from "../db/client.js";
 import { syncQueue } from "../queue/queue.js";
 import { deleteByAccount } from "../vector/pinecone.js";
@@ -21,10 +21,10 @@ accountsRouter.get("/", async (req, res) => {
 accountsRouter.delete("/:accountId", async (req, res) => {
   const userId = (req as AuthedRequest).userId;
   const { accountId } = req.params;
-  const rows = await query<{ id: string }>(
-    "SELECT id FROM accounts WHERE id = $1 AND user_id = $2",
-    [accountId, userId],
-  );
+  const rows = await query<{ id: string }>("SELECT id FROM accounts WHERE id = $1 AND user_id = $2", [
+    accountId,
+    userId,
+  ]);
   if (rows.length === 0) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -48,10 +48,10 @@ accountsRouter.get("/:accountId/sync", async (req, res) => {
 
 accountsRouter.post("/:accountId/sync", async (req, res) => {
   const userId = (req as AuthedRequest).userId;
-  const rows = await query<{ id: string }>(
-    "SELECT id FROM accounts WHERE id = $1 AND user_id = $2",
-    [req.params.accountId, userId],
-  );
+  const rows = await query<{ id: string }>("SELECT id FROM accounts WHERE id = $1 AND user_id = $2", [
+    req.params.accountId,
+    userId,
+  ]);
   if (rows.length === 0) {
     res.status(404).json({ error: "not_found" });
     return;

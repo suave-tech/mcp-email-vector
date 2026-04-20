@@ -16,8 +16,10 @@ function buildContext(hits: SearchHit[]): string {
   return hits
     .map((h, i) => {
       const m = h.metadata;
-      return `[${i + 1}] From: ${m.sender_email} | Subject: ${m.subject} | Date: ${m.date}\n` +
-        `    (account: ${m.account_id}, message-id: ${m.message_id})`;
+      return (
+        `[${i + 1}] From: ${m.sender_email} | Subject: ${m.subject} | Date: ${m.date}\n` +
+        `    (account: ${m.account_id}, message-id: ${m.message_id})`
+      );
     })
     .join("\n\n");
 }

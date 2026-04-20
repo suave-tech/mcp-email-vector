@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
-import { connection, type SyncJobPayload } from "./queue.js";
-import { syncAccount } from "../ingestion/sync.js";
 import { query } from "../db/client.js";
+import { syncAccount } from "../ingestion/sync.js";
+import { type SyncJobPayload, connection } from "./queue.js";
 
 export const worker = new Worker<SyncJobPayload>(
   "email-sync",
@@ -19,10 +19,10 @@ export const worker = new Worker<SyncJobPayload>(
       );
       return { synced };
     } catch (err) {
-      await query(
-        `UPDATE sync_jobs SET status = 'failed', completed_at = now(), error = $1 WHERE id = $2`,
-        [String((err as Error).message), syncJob!.id],
-      );
+      await query(`UPDATE sync_jobs SET status = 'failed', completed_at = now(), error = $1 WHERE id = $2`, [
+        String((err as Error).message),
+        syncJob!.id,
+      ]);
       throw err;
     }
   },

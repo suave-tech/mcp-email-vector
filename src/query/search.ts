@@ -1,6 +1,6 @@
-import { embed } from "../ingestion/embedder.js";
-import { queryEmailVectors, type EmailVectorMetadata } from "../vector/pinecone.js";
 import { DEFAULT_TOP_K } from "../config/constants.js";
+import { embed } from "../ingestion/embedder.js";
+import { type EmailVectorMetadata, queryEmailVectors } from "../vector/pinecone.js";
 
 export interface SearchRequest {
   userId: string;

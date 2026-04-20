@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth, type AuthedRequest } from "../auth/jwt.js";
-import { search } from "../query/search.js";
+import { type AuthedRequest, requireAuth } from "../auth/jwt.js";
 import { answer } from "../query/llm.js";
+import { search } from "../query/search.js";
 
 export const searchRouter: Router = Router();
 

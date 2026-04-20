@@ -6,7 +6,10 @@ export interface SyncLogEntry {
   vector_id: string;
 }
 
-export async function getExistingLog(accountId: string, messageIds: string[]): Promise<Map<string, SyncLogEntry>> {
+export async function getExistingLog(
+  accountId: string,
+  messageIds: string[],
+): Promise<Map<string, SyncLogEntry>> {
   if (messageIds.length === 0) return new Map();
   const rows = await query<SyncLogEntry>(
     "SELECT message_id, content_hash, vector_id FROM sync_log WHERE account_id = $1 AND message_id = ANY($2)",

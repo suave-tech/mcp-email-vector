@@ -1,11 +1,11 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { type NextFunction, type Request, type Response, Router } from "express";
 import jwt from "jsonwebtoken";
-import { oauthClient } from "../providers/gmail.js";
 import { encrypt } from "../auth/crypto.js";
-import { query } from "../db/client.js";
-import { requireAuth, type AuthedRequest } from "../auth/jwt.js";
-import { syncQueue } from "../queue/queue.js";
+import { type AuthedRequest, requireAuth } from "../auth/jwt.js";
 import { env } from "../config/env.js";
+import { query } from "../db/client.js";
+import { oauthClient } from "../providers/gmail.js";
+import { syncQueue } from "../queue/queue.js";
 
 export const oauthRouter: Router = Router();
 
@@ -84,7 +84,9 @@ oauthRouter.get("/google/callback", async (req, res) => {
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
 
-  const oauth2 = await client.request<{ email: string }>({ url: "https://openidconnect.googleapis.com/v1/userinfo" });
+  const oauth2 = await client.request<{ email: string }>({
+    url: "https://openidconnect.googleapis.com/v1/userinfo",
+  });
   const emailAddress = oauth2.data.email;
 
   const [acct] = await query<{ id: string }>(

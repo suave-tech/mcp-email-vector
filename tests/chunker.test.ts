@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { MAX_EMAIL_TOKENS } from "../src/config/constants.js";
 import { buildEmbeddingText, contentHash } from "../src/ingestion/chunker.js";
 import type { NormalizedEmail } from "../src/providers/types.js";
-import { MAX_EMAIL_TOKENS } from "../src/config/constants.js";
 
 const base: NormalizedEmail = {
   messageId: "<abc@example.com>",

@@ -27,6 +27,13 @@ const schema = z.object({
   MS_CLIENT_SECRET: z.string(),
   MS_TENANT_ID: z.string().default("common"),
   MS_REDIRECT_URI: z.string().url(),
+
+  // Optional destructive feature. Off by default so self-hosters who only
+  // want search never request write scope.
+  ENABLE_INBOX_CLEANUP: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
 });
 
 export const env = schema.parse(process.env);

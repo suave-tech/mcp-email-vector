@@ -1,5 +1,5 @@
-import { query } from "../db/client.js";
 import { EMAIL_LIMIT_PER_USER } from "../config/constants.js";
+import { query } from "../db/client.js";
 
 export async function getIndexedCount(userId: string): Promise<number> {
   const rows = await query<{ emails_indexed: number }>(

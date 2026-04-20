@@ -7,8 +7,8 @@ export interface NormalizedEmail {
   senderName: string | null;
   recipients: string[];
   subject: string;
-  bodyText: string;        // plain text, HTML already stripped
-  date: string;            // ISO 8601
+  bodyText: string; // plain text, HTML already stripped
+  date: string; // ISO 8601
   labels: string[];
   hasAttachments: boolean;
 }

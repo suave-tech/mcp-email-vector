@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { ensureFreshToken } from "../auth/token.js";
+import { INITIAL_SYNC_BATCH } from "../config/constants.js";
 import { query } from "../db/client.js";
-import { decrypt, encrypt } from "../auth/crypto.js";
 import { providerFor } from "../providers/index.js";
 import type { NormalizedEmail } from "../providers/types.js";
-import { buildEmbeddingText, contentHash } from "./chunker.js";
-import { embedBatch } from "./embedder.js";
-import { getExistingLog, recordLog } from "./dedup.js";
-import { incrementIndexedCount, remainingQuota } from "./quota.js";
 import { upsertEmailVectors } from "../vector/pinecone.js";
-import { INITIAL_SYNC_BATCH, TOKEN_REFRESH_SKEW_MS } from "../config/constants.js";
+import { buildEmbeddingText, contentHash } from "./chunker.js";
+import { getExistingLog, recordLog } from "./dedup.js";
+import { embedBatch } from "./embedder.js";
+import { incrementIndexedCount, remainingQuota } from "./quota.js";
 
 interface AccountRow {
   id: string;
@@ -23,11 +23,13 @@ interface AccountRow {
 }
 
 export async function syncAccount(accountId: string): Promise<{ synced: number }> {
-  const [acct] = await query<AccountRow>("SELECT * FROM accounts WHERE id = $1 AND is_active = true", [accountId]);
+  const [acct] = await query<AccountRow>("SELECT * FROM accounts WHERE id = $1 AND is_active = true", [
+    accountId,
+  ]);
   if (!acct) throw new Error("account_not_found");
 
   const provider = providerFor(acct.provider);
-  const accessToken = await ensureFreshToken(acct, provider);
+  const accessToken = await ensureFreshToken(acct);
 
   const since = acct.last_synced ? new Date(acct.last_synced) : undefined;
   let pageToken: string | undefined;
@@ -48,10 +50,9 @@ export async function syncAccount(accountId: string): Promise<{ synced: number }
     pageToken = page.nextPageToken;
   } while (pageToken);
 
-  await query(
-    "UPDATE accounts SET last_synced = now(), initial_sync_complete = true WHERE id = $1",
-    [accountId],
-  );
+  await query("UPDATE accounts SET last_synced = now(), initial_sync_complete = true WHERE id = $1", [
+    accountId,
+  ]);
 
   return { synced: totalSynced };
 }
@@ -59,7 +60,10 @@ export async function syncAccount(accountId: string): Promise<{ synced: number }
 async function processBatch(acct: AccountRow, emails: NormalizedEmail[]): Promise<number> {
   if (emails.length === 0) return 0;
 
-  const existing = await getExistingLog(acct.id, emails.map((e) => e.messageId));
+  const existing = await getExistingLog(
+    acct.id,
+    emails.map((e) => e.messageId),
+  );
   const toEmbed: { email: NormalizedEmail; hash: string; vectorId: string; isNew: boolean }[] = [];
 
   for (const email of emails) {
@@ -108,23 +112,4 @@ async function processBatch(acct: AccountRow, emails: NormalizedEmail[]): Promis
   const newlyAdded = toEmbed.filter((t) => t.isNew).length;
   await incrementIndexedCount(acct.user_id, newlyAdded);
   return toEmbed.length;
-}
-
-async function ensureFreshToken(acct: AccountRow, provider: ReturnType<typeof providerFor>): Promise<string> {
-  const expires = acct.token_expires_at ? new Date(acct.token_expires_at).getTime() : 0;
-  if (expires - Date.now() > TOKEN_REFRESH_SKEW_MS) {
-    return decrypt(acct.access_token);
-  }
-
-  try {
-    const refreshed = await provider.refreshAccessToken(decrypt(acct.refresh_token));
-    await query(
-      "UPDATE accounts SET access_token = $1, token_expires_at = $2, needs_reauth = false WHERE id = $3",
-      [encrypt(refreshed.accessToken), refreshed.expiresAt.toISOString(), acct.id],
-    );
-    return refreshed.accessToken;
-  } catch (err) {
-    await query("UPDATE accounts SET needs_reauth = true WHERE id = $1", [acct.id]);
-    throw err;
-  }
 }
