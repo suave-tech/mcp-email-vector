@@ -1,4 +1,4 @@
-export type Provider = "gmail" | "outlook" | "imap";
+export type Provider = "gmail" | "outlook" | "imap" | "yahoo";
 
 export interface NormalizedEmail {
   messageId: string;
@@ -17,11 +17,21 @@ export interface FetchOptions {
   since?: Date;
   limit?: number;
   pageToken?: string;
+  // Opaque JSON-serializable state the provider persists across sync runs —
+  // Gmail ignores it; the IMAP adapter uses it to track per-folder
+  // UIDVALIDITY + lastUid so incremental syncs resume correctly after a
+  // UIDVALIDITY rollover. Written back via FetchPage.providerState.
+  providerState?: unknown;
+  // The account's email address. Gmail ignores it (userinfo endpoint is
+  // implicit in the OAuth token); the IMAP adapter needs it for XOAUTH2
+  // SASL, which takes both the username and the access token.
+  emailAddress?: string;
 }
 
 export interface FetchPage {
   emails: NormalizedEmail[];
   nextPageToken?: string;
+  providerState?: unknown;
 }
 
 export interface EmailProvider {

@@ -42,16 +42,16 @@ app.get("/metrics", (_req, res) => {
   res.type("text/plain").send(renderPrometheus());
 });
 
-// Landing page after the Google OAuth callback redirects the browser here.
-// Plain HTML so there's no build step; the wizard's poller is what actually
-// advances the flow — this page just tells the human they can close the tab.
+// Landing page after either provider's OAuth callback redirects here. Plain
+// HTML so there's no build step; the wizard's poller is what actually advances
+// the flow — this page just tells the human they can close the tab.
 app.get("/accounts", (req, res) => {
   const connected = typeof req.query.connected === "string";
   res.type("html").send(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>${connected ? "Gmail connected" : "sts-project-vector-email"}</title>
+  <title>${connected ? "Mailbox connected" : "sts-project-vector-email"}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font: 16px/1.5 system-ui, sans-serif; margin: 0; min-height: 100vh;
@@ -68,7 +68,7 @@ app.get("/accounts", (req, res) => {
     ${
       connected
         ? `<div class="ok">✓</div>
-    <h1>Gmail connected</h1>
+    <h1>Mailbox connected</h1>
     <p>You can close this tab and return to your terminal. Initial sync is running in the background.</p>`
         : `<h1>sts-project-vector-email</h1>
     <p>API is running. Start a connection flow from the CLI with <code>pnpm setup</code>.</p>`

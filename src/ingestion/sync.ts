@@ -15,13 +15,14 @@ import { incrementIndexedCount, remainingQuota } from "./quota.js";
 interface AccountRow {
   id: string;
   user_id: string;
-  provider: "gmail" | "outlook" | "imap";
+  provider: "gmail" | "outlook" | "imap" | "yahoo";
   email_address: string;
   access_token: string;
   refresh_token: string;
   token_expires_at: string | null;
   last_synced: string | null;
   initial_sync_complete: boolean;
+  provider_state: unknown | null;
 }
 
 export async function syncAccount(
@@ -38,6 +39,7 @@ export async function syncAccount(
 
   const since = acct.last_synced ? new Date(acct.last_synced) : undefined;
   let pageToken: string | undefined;
+  let providerState: unknown = acct.provider_state ?? undefined;
   let totalSynced = 0;
   let page = 0;
 
@@ -52,11 +54,22 @@ export async function syncAccount(
       since,
       limit: Math.min(INITIAL_SYNC_BATCH, quotaLeft),
       pageToken,
+      providerState,
+      emailAddress: acct.email_address,
     });
 
     const processed = await processBatch(acct, result.emails.slice(0, quotaLeft), log);
     totalSynced += processed;
     pageToken = result.nextPageToken;
+    // Only persist when the provider actually advanced its state. Gmail
+    // returns undefined every page so the column stays NULL.
+    if (result.providerState !== undefined) {
+      providerState = result.providerState;
+      await query("UPDATE accounts SET provider_state = $1 WHERE id = $2", [
+        JSON.stringify(providerState),
+        accountId,
+      ]);
+    }
     page++;
     log.debug({ page, processed, totalSynced, hasMore: !!pageToken }, "batch processed");
   } while (pageToken);

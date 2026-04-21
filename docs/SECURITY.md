@@ -33,6 +33,13 @@ Out of scope:
 - **All SQL queries are parameterized** via the `pg` library — the codebase never uses string interpolation to assemble queries.
 - **Structured logs with redaction**: `pino` is configured to drop `access_token`, `refresh_token`, and `authorization` keys before serialization ([src/logger.ts](../src/logger.ts)). Adding a new sensitive field? Add its path to the redact list.
 
+## Provider-specific notes
+
+- **Gmail cleanup** moves messages to Trash via `batchModify` (`addLabelIds: TRASH`); Gmail auto-empties Trash after 30 days.
+- **Yahoo / IMAP cleanup** moves messages to the Trash folder via IMAP `UID MOVE` (RFC 6851). Retention depends on the user's Yahoo account setting — unlike Gmail, there's no fixed 30-day window.
+- **XOAUTH2** is always over TLS (port 993, `secure: true`); the IMAP adapter refuses to connect without it.
+- **Yahoo refresh tokens** expire after roughly 60 days of inactivity. When refresh fails, the account is flagged `needs_reauth = true`; re-run the OAuth flow for that account to mint fresh tokens.
+
 ## Assumptions for self-hosted deployments
 
 This server is designed to run **behind a trusted boundary** — your own localhost, a VPN, or a reverse proxy you control. It deliberately does not implement:

@@ -33,8 +33,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint: ["sh", "-c"]
-    command: ["psql $$DATABASE_URL -f src/db/schema.sql"]
+    command: ["node", "dist/db/migrate.js"]
     restart: "no"
 
   api:

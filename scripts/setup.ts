@@ -28,7 +28,7 @@ function log(msg = ""): void {
   console.log(msg);
 }
 function step(n: number, title: string): void {
-  console.log(`\n\x1b[1m[${n}/8] ${title}\x1b[0m`);
+  console.log(`\n\x1b[1m[${n}/9] ${title}\x1b[0m`);
 }
 function ok(msg: string): void {
   console.log(`  \x1b[32m✓\x1b[0m ${msg}`);
@@ -200,32 +200,84 @@ async function main(): Promise<void> {
   writeFileSync(ENV_PATH, envText);
   values = parseEnv(envText);
 
-  // ---- Step 3: Google Cloud checklist -------------------------------------
-  step(3, "Google Cloud OAuth credentials");
-  log("  If you haven't already, set up a Google OAuth client:");
-  log("    1. console.cloud.google.com → new project");
-  log("    2. APIs & Services → Library → enable \x1b[1mGmail API\x1b[0m");
-  log("    3. OAuth consent screen → External → add your Gmail as a Test user");
-  log("       Scopes: gmail.readonly, userinfo.email (+ gmail.modify if using cleanup)");
-  log("    4. Credentials → Create → OAuth client ID → Web application");
-  log("       Authorized redirect URI: \x1b[1mhttp://localhost:3000/api/oauth/google/callback\x1b[0m");
-  log("");
-  if (!(values.get("GOOGLE_CLIENT_ID") ?? "") || !(values.get("GOOGLE_CLIENT_SECRET") ?? "")) {
-    await confirm("Done with the Google Cloud steps above?", true);
+  // ---- Step 3: provider choice -------------------------------------------
+  step(3, "Choose an email provider");
+  log("  Which mailbox are you connecting?");
+  log("    1) Google (Gmail)");
+  log("    2) Yahoo Mail");
+  const defaultChoice = values.get("YAHOO_CLIENT_ID") && !values.get("GOOGLE_CLIENT_ID") ? "2" : "1";
+  const choice = await prompt("Choice", { default: defaultChoice });
+  const providerChoice: "google" | "yahoo" = choice === "2" ? "yahoo" : "google";
+  ok(`provider: ${providerChoice}`);
+
+  // ---- Step 4: OAuth credentials for the chosen provider -----------------
+  if (providerChoice === "google") {
+    step(4, "Google Cloud OAuth credentials");
+    log("  If you haven't already, set up a Google OAuth client:");
+    log("    1. console.cloud.google.com → new project");
+    log("    2. APIs & Services → Library → enable \x1b[1mGmail API\x1b[0m");
+    log("    3. OAuth consent screen → External → add your Gmail as a Test user");
+    log("       Scopes: gmail.readonly, userinfo.email (+ gmail.modify if using cleanup)");
+    log("    4. Credentials → Create → OAuth client ID → Web application");
+    log("       Authorized redirect URI: \x1b[1mhttp://localhost:3000/api/oauth/google/callback\x1b[0m");
+    log("");
+    if (!(values.get("GOOGLE_CLIENT_ID") ?? "") || !(values.get("GOOGLE_CLIENT_SECRET") ?? "")) {
+      await confirm("Done with the Google Cloud steps above?", true);
+    }
+
+    const googleId = await askWithValidation("Google OAuth client ID", "GOOGLE_CLIENT_ID", values, [
+      "Find it in Google Cloud → Credentials → your OAuth 2.0 Client ID",
+    ]);
+    envText = setEnvLine(envText, "GOOGLE_CLIENT_ID", googleId);
+
+    const googleSecret = await askWithValidation(
+      "Google OAuth client secret",
+      "GOOGLE_CLIENT_SECRET",
+      values,
+      ["Same page as the client ID — labeled 'Client secret'"],
+    );
+    envText = setEnvLine(envText, "GOOGLE_CLIENT_SECRET", googleSecret);
+  } else {
+    step(4, "Yahoo OAuth credentials");
+    log("  If you haven't already, set up a Yahoo Developer App:");
+    log("    1. developer.yahoo.com/apps → Create an App");
+    log("    2. Application Type: Web Application");
+    log("    3. API Permissions → Mail: \x1b[1mRead\x1b[0m (and \x1b[1mRead/Write\x1b[0m if using cleanup)");
+    log("    4. OpenID Connect Permissions: \x1b[1mEmail\x1b[0m, \x1b[1mProfile\x1b[0m");
+    log("    5. Redirect URI: \x1b[1mhttp://localhost:3000/api/oauth/yahoo/callback\x1b[0m");
+    log("    (Yahoo rejects redirect-URI mismatches silently — paste that line verbatim.)");
+    log("");
+    if (!(values.get("YAHOO_CLIENT_ID") ?? "") || !(values.get("YAHOO_CLIENT_SECRET") ?? "")) {
+      await confirm("Done with the Yahoo Developer Network steps above?", true);
+    }
+
+    const yahooId = await askWithValidation(
+      "Yahoo client ID (aka 'Consumer Key')",
+      "YAHOO_CLIENT_ID",
+      values,
+      ["Shown on the app's detail page in developer.yahoo.com"],
+    );
+    envText = setEnvLine(envText, "YAHOO_CLIENT_ID", yahooId);
+
+    const yahooSecret = await askWithValidation(
+      "Yahoo client secret (aka 'Consumer Secret')",
+      "YAHOO_CLIENT_SECRET",
+      values,
+      ["Same page, 'Client Secret'"],
+    );
+    envText = setEnvLine(envText, "YAHOO_CLIENT_SECRET", yahooSecret);
+
+    const yahooRedirect =
+      values.get("YAHOO_REDIRECT_URI") ?? "http://localhost:3000/api/oauth/yahoo/callback";
+    envText = setEnvLine(envText, "YAHOO_REDIRECT_URI", yahooRedirect);
+    ok(`YAHOO_REDIRECT_URI = ${yahooRedirect}`);
   }
 
-  const googleId = await askWithValidation("Google OAuth client ID", "GOOGLE_CLIENT_ID", values, [
-    "Find it in Google Cloud → Credentials → your OAuth 2.0 Client ID",
-  ]);
-  envText = setEnvLine(envText, "GOOGLE_CLIENT_ID", googleId);
+  // Refresh values snapshot so later prompts see what we just wrote.
+  values = parseEnv(envText);
 
-  const googleSecret = await askWithValidation("Google OAuth client secret", "GOOGLE_CLIENT_SECRET", values, [
-    "Same page as the client ID — labeled 'Client secret'",
-  ]);
-  envText = setEnvLine(envText, "GOOGLE_CLIENT_SECRET", googleSecret);
-
-  // ---- Step 4: provider API keys ------------------------------------------
-  step(4, "Provider API keys");
+  // ---- Step 5: backing-service API keys ----------------------------------
+  step(5, "Provider API keys");
 
   const openai = await askWithValidation(
     "OpenAI API key (for embeddings)",
@@ -258,9 +310,13 @@ async function main(): Promise<void> {
   );
   envText = setEnvLine(envText, "PINECONE_API_KEY", pinecone);
 
-  // ---- Step 5: user + cleanup choice --------------------------------------
-  step(5, "Account details");
-  const email = await prompt("The Gmail address you're going to connect");
+  // ---- Step 6: user + cleanup choice --------------------------------------
+  step(6, "Account details");
+  const promptLabel =
+    providerChoice === "yahoo"
+      ? "The Yahoo Mail address you're going to connect"
+      : "The Gmail address you're going to connect";
+  const email = await prompt(promptLabel);
   if (!/.+@.+\..+/.test(email)) fail(`"${email}" doesn't look like an email`);
   const enableCleanup = await confirm(
     "Enable inbox cleanup? (lets rules-based trashing of newsletters — off by default)",
@@ -270,8 +326,8 @@ async function main(): Promise<void> {
   writeFileSync(ENV_PATH, envText);
   ok(".env written");
 
-  // ---- Step 6: boot the stack ---------------------------------------------
-  step(6, "Booting Docker stack (postgres, redis, migrate, api, worker, scheduler)");
+  // ---- Step 7: boot the stack ---------------------------------------------
+  step(7, "Booting Docker stack (postgres, redis, migrate, api, worker, scheduler)");
   log("  This builds images on first run — can take 1–2 minutes.");
   const upCode = await run("docker", ["compose", "up", "-d", "--build"]);
   if (upCode !== 0) fail("docker compose up failed — see output above");
@@ -287,20 +343,25 @@ async function main(): Promise<void> {
   const doctorCode = await run("pnpm", ["--silent", "run", "doctor"]);
   if (doctorCode !== 0) fail("doctor reported failures — fix the red items above and rerun `pnpm setup`");
 
-  // ---- Step 7: create user + OAuth ----------------------------------------
-  step(7, "Connecting Gmail");
+  // ---- Step 8: create user + OAuth ----------------------------------------
+  step(8, `Connecting ${providerChoice === "yahoo" ? "Yahoo Mail" : "Gmail"}`);
   // Import lazily so earlier steps can run before the DB is up.
   const { createUser } = await import("./create-user.js");
   const { pool } = await import("../src/db/client.js");
-  const { userId, token, oauthUrl } = await createUser(email, { cleanup: enableCleanup });
+  const { userId, token, oauthUrl } = await createUser(email, {
+    cleanup: enableCleanup,
+    provider: providerChoice,
+  });
   ok(`user ${email} (${userId})`);
 
   log("");
-  log("  Opening Google consent screen in your browser…");
+  log(`  Opening ${providerChoice === "yahoo" ? "Yahoo" : "Google"} consent screen in your browser…`);
   log(`  If it doesn't open, paste this URL: \x1b[36m${oauthUrl}\x1b[0m`);
   await openInBrowser(oauthUrl);
 
-  process.stdout.write("  waiting for you to finish Google consent");
+  process.stdout.write(
+    `  waiting for you to finish ${providerChoice === "yahoo" ? "Yahoo" : "Google"} consent`,
+  );
   const connected = await waitForAccount(token, 300_000);
   log("");
   if (!connected) {
@@ -309,11 +370,13 @@ async function main(): Promise<void> {
       "Didn't see a connected account within 5 minutes. Rerun `pnpm setup` once you've finished the consent screen — it'll pick up from here.",
     );
   }
-  ok("Gmail connected — initial sync is running in the background");
+  ok(
+    `${providerChoice === "yahoo" ? "Yahoo" : "Gmail"} connected — initial sync is running in the background`,
+  );
   await pool.end();
 
-  // ---- Step 8: MCP build + Claude registration ----------------------------
-  step(8, "Building the MCP server for Claude Code");
+  // ---- Step 9: MCP build + Claude registration ----------------------------
+  step(9, "Building the MCP server for Claude Code");
   const needsBuild = !existsSync(MCP_SERVER);
   if (needsBuild) {
     const installCode = await run("pnpm", ["install"], { cwd: MCP_DIR });

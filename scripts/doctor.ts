@@ -96,11 +96,20 @@ const checks: Check[] = [
     },
   },
   {
-    name: "google: oauth client id present",
+    // Setup flow only asks for the chosen provider's creds, so require that
+    // at least one OAuth provider is configured rather than failing Yahoo-only
+    // users on missing Google creds (or vice versa).
+    name: "oauth: at least one provider configured",
     run: async () => {
-      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET)
-        throw new Error("GOOGLE_CLIENT_ID/SECRET missing");
-      return "configured (actual OAuth tested via browser flow)";
+      const google = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+      const yahoo = Boolean(env.YAHOO_CLIENT_ID && env.YAHOO_CLIENT_SECRET && env.YAHOO_REDIRECT_URI);
+      if (!google && !yahoo) {
+        throw new Error(
+          "no provider configured — set GOOGLE_CLIENT_ID/SECRET or YAHOO_CLIENT_ID/SECRET/REDIRECT_URI",
+        );
+      }
+      const configured = [google && "google", yahoo && "yahoo"].filter(Boolean).join(", ");
+      return `${configured} (actual OAuth tested via browser flow)`;
     },
   },
   {

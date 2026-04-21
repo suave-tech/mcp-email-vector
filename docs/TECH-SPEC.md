@@ -75,9 +75,20 @@ This system ingests emails from multiple user-owned accounts, embeds them using 
 |----------|----------|-------------|--------|
 | Gmail | Gmail REST API | OAuth 2.0 | ✅ Implemented |
 | Outlook / Microsoft 365 | Microsoft Graph API | OAuth 2.0 | 🚧 Adapter compiles, OAuth routes not implemented — see `TODO` in [src/routes/oauth.ts](../src/routes/oauth.ts) |
-| Generic IMAP | IMAP over TLS | App password / OAuth | ❌ Not started |
+| Yahoo Mail | IMAP + XOAUTH2 | OAuth 2.0 | ✅ Implemented (same adapter as generic IMAP) |
+| Generic IMAP | IMAP over TLS | OAuth 2.0 (per-preset) or app password | 🚧 Adapter ready; only Yahoo preset configured today |
 
-> ⚠️ **Drift note.** Only Gmail is end-to-end functional. `providerFor("outlook")` will return the adapter but no OAuth entry points exist yet, so no account can actually be connected via Outlook.
+> ⚠️ **Drift note.** Gmail and Yahoo are end-to-end functional. Outlook has a stub adapter with no OAuth routes. Adding a new IMAP backend (iCloud, Fastmail) is a config-only change — see `src/providers/presets.ts`.
+
+### IMAP per-folder state
+
+IMAP servers don't expose a Gmail-style page-token cursor. The adapter instead tracks, per folder, the `UIDVALIDITY` value and the highest UID it's successfully fetched. On each sync:
+
+- Open folder, read `UIDVALIDITY`.
+- If it matches the stored value → fetch `UID {lastUid+1}:*`.
+- If it changed → re-scan from UID 1; dedup on RFC822 Message-ID catches any duplicates that were already indexed.
+
+This state is persisted in `accounts.provider_state` as JSON: `{ folders: { [name]: { uidValidity, lastUid } }, cursor?: { folder, nextUid } }`. The optional `cursor` is a mid-page resume point used when a single `fetchPage` call hits its batch limit partway through a folder.
 
 ### 4.2 Account Registration Flow
 

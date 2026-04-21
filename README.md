@@ -13,8 +13,9 @@ Full design rationale lives in [TECH-SPEC.md](./TECH-SPEC.md).
 | Area | State |
 |---|---|
 | Gmail (OAuth + sync + search) | ✅ Working |
+| Yahoo Mail (IMAP + XOAUTH2, sync + search + cleanup) | ✅ Working ([docs/YAHOO-SETUP.md](docs/YAHOO-SETUP.md)) |
 | Outlook / Microsoft Graph | 🚧 Env + adapter sketch; OAuth routes not implemented |
-| Generic IMAP | ❌ Not started |
+| Generic IMAP (iCloud, Fastmail, custom) | 🚧 Adapter shared with Yahoo; per-preset OAuth config pending |
 | Attachment indexing (PDFs, etc.) | ❌ Not started — text-only today |
 | GDPR erasure endpoint | 🚧 Helper exists, no route |
 | Inbox cleanup (opt-in, off by default) | ✅ Working ([see below](#inbox-cleanup-opt-in)) |

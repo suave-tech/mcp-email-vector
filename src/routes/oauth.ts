@@ -1,11 +1,15 @@
+import { Buffer } from "node:buffer";
+import { randomBytes } from "node:crypto";
 import { type NextFunction, type Request, type Response, Router } from "express";
 import jwt from "jsonwebtoken";
 import { encrypt } from "../auth/crypto.js";
 import { getUserId, requireAuth } from "../auth/jwt.js";
 import { env } from "../config/env.js";
 import { query } from "../db/client.js";
+import { logger } from "../logger.js";
 import { metrics } from "../metrics.js";
 import { oauthClient } from "../providers/gmail.js";
+import { YAHOO_PRESET } from "../providers/presets.js";
 import { syncQueue } from "../queue/queue.js";
 
 export const oauthRouter: Router = Router();
@@ -113,6 +117,143 @@ oauthRouter.get("/google/callback", async (req, res) => {
   await syncQueue.add("initial", { accountId: acct!.id, kind: "initial" });
   metrics.oauthCallbacks.inc();
   res.redirect(`${new URL(env.GOOGLE_REDIRECT_URI).origin}/accounts?connected=${acct!.id}`);
+});
+
+// ---------------------------------------------------------------------------
+// Yahoo Mail — IMAP + XOAUTH2. Same {u, c} state shape, same DB columns.
+// Differs from Google: we build the auth URL by hand (no googleapis helper),
+// exchange the code via a POST + HTTP Basic auth, and fetch the email from
+// Yahoo's OpenID Connect userinfo endpoint.
+
+function yahooScopes(cleanup: boolean): string[] {
+  const scopes = [...YAHOO_PRESET.oauth.scopes];
+  if (cleanup && env.ENABLE_INBOX_CLEANUP) scopes.push(YAHOO_PRESET.oauth.writeScope);
+  return scopes;
+}
+
+function assertYahooConfigured(res: Response): boolean {
+  if (!env.YAHOO_CLIENT_ID || !env.YAHOO_CLIENT_SECRET || !env.YAHOO_REDIRECT_URI) {
+    res.status(501).json({ error: "yahoo_not_configured" });
+    return false;
+  }
+  return true;
+}
+
+oauthRouter.get("/yahoo/start", authFromHeaderOrQuery, (req, res) => {
+  if (!assertYahooConfigured(res)) return;
+  const cleanup = req.query.cleanup === "true" || req.query.cleanup === "1";
+  const scopes = yahooScopes(cleanup);
+  const state = JSON.stringify({ u: getUserId(req), c: cleanup });
+  // Yahoo's authorization endpoint: space-separated scopes, nonce required
+  // when the `openid` scope is requested. URL-encoded.
+  const params = new URLSearchParams({
+    client_id: env.YAHOO_CLIENT_ID!,
+    redirect_uri: env.YAHOO_REDIRECT_URI!,
+    response_type: "code",
+    scope: scopes.join(" "),
+    state,
+    nonce: randomBytes(16).toString("hex"),
+  });
+  res.redirect(`${YAHOO_PRESET.oauth.authEndpoint}?${params.toString()}`);
+});
+
+interface YahooTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
+  id_token?: string;
+  xoauth_yahoo_guid?: string;
+}
+
+interface YahooUserinfo {
+  email?: string;
+  sub?: string;
+}
+
+oauthRouter.get("/yahoo/callback", async (req, res) => {
+  if (!assertYahooConfigured(res)) return;
+
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  const rawState = typeof req.query.state === "string" ? req.query.state : null;
+  if (!code || !rawState) {
+    res.status(400).json({ error: "missing_code_or_state" });
+    return;
+  }
+
+  let userId: string | null = null;
+  let cleanup = false;
+  try {
+    const parsed = JSON.parse(rawState) as { u?: string; c?: boolean };
+    userId = parsed.u ?? null;
+    cleanup = parsed.c === true;
+  } catch {
+    userId = rawState;
+  }
+  if (!userId) {
+    res.status(400).json({ error: "missing_user" });
+    return;
+  }
+
+  // Exchange code → tokens. Yahoo requires client auth via HTTP Basic.
+  const tokenRes = await fetch(YAHOO_PRESET.oauth.tokenEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${Buffer.from(`${env.YAHOO_CLIENT_ID}:${env.YAHOO_CLIENT_SECRET}`).toString("base64")}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      redirect_uri: env.YAHOO_REDIRECT_URI!,
+      code,
+    }).toString(),
+  });
+  if (!tokenRes.ok) {
+    logger.error({ status: tokenRes.status }, "yahoo token exchange failed");
+    res.status(502).json({ error: "yahoo_token_exchange_failed" });
+    return;
+  }
+  const tokens = (await tokenRes.json()) as YahooTokenResponse;
+
+  const userinfoRes = await fetch(YAHOO_PRESET.oauth.userinfoEndpoint, {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+  if (!userinfoRes.ok) {
+    logger.error({ status: userinfoRes.status }, "yahoo userinfo failed");
+    res.status(502).json({ error: "yahoo_userinfo_failed" });
+    return;
+  }
+  const userinfo = (await userinfoRes.json()) as YahooUserinfo;
+  const emailAddress = userinfo.email;
+  if (!emailAddress) {
+    res.status(502).json({ error: "yahoo_userinfo_no_email" });
+    return;
+  }
+
+  const [acct] = await query<{ id: string }>(
+    `INSERT INTO accounts (user_id, provider, email_address, access_token, refresh_token, token_expires_at, scopes_granted)
+     VALUES ($1, 'yahoo', $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, email_address) DO UPDATE
+       SET access_token = EXCLUDED.access_token,
+           refresh_token = EXCLUDED.refresh_token,
+           token_expires_at = EXCLUDED.token_expires_at,
+           scopes_granted = EXCLUDED.scopes_granted,
+           is_active = true,
+           needs_reauth = false
+     RETURNING id`,
+    [
+      userId,
+      emailAddress,
+      encrypt(tokens.access_token),
+      encrypt(tokens.refresh_token),
+      new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      yahooScopes(cleanup),
+    ],
+  );
+
+  await syncQueue.add("initial", { accountId: acct!.id, kind: "initial" });
+  metrics.oauthCallbacks.inc();
+  res.redirect(`${new URL(env.YAHOO_REDIRECT_URI!).origin}/accounts?connected=${acct!.id}`);
 });
 
 // TODO: mirror for Microsoft (/microsoft/start, /microsoft/callback).

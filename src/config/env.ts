@@ -28,6 +28,12 @@ const schema = z.object({
   MS_TENANT_ID: z.string().default("common"),
   MS_REDIRECT_URI: z.string().url(),
 
+  // Yahoo OAuth (IMAP + XOAUTH2). Optional — Gmail-only deployments don't
+  // need these. The /yahoo/start route returns 501 if any are missing.
+  YAHOO_CLIENT_ID: z.string().optional(),
+  YAHOO_CLIENT_SECRET: z.string().optional(),
+  YAHOO_REDIRECT_URI: z.string().url().optional(),
+
   // Optional destructive feature. Off by default so self-hosters who only
   // want search never request write scope.
   ENABLE_INBOX_CLEANUP: z

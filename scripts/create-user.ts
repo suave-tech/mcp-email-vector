@@ -1,6 +1,8 @@
 import { sign } from "../src/auth/jwt.js";
 import { pool, query } from "../src/db/client.js";
 
+export type OAuthProvider = "google" | "yahoo";
+
 export interface CreateUserResult {
   userId: string;
   token: string;
@@ -10,7 +12,7 @@ export interface CreateUserResult {
 
 export async function createUser(
   email: string,
-  opts: { cleanup?: boolean; apiUrl?: string } = {},
+  opts: { cleanup?: boolean; apiUrl?: string; provider?: OAuthProvider } = {},
 ): Promise<CreateUserResult> {
   if (!/.+@.+\..+/.test(email)) throw new Error(`invalid email: ${email}`);
   const existing = await query<{ id: string }>("SELECT id FROM users WHERE email = $1", [email]);
@@ -25,8 +27,9 @@ export async function createUser(
   }
   const token = sign(userId);
   const base = opts.apiUrl ?? process.env.API_URL ?? "http://localhost:3000";
+  const provider: OAuthProvider = opts.provider ?? "google";
   const cleanupQs = opts.cleanup ? "&cleanup=true" : "";
-  const oauthUrl = `${base}/api/oauth/google/start?token=${token}${cleanupQs}`;
+  const oauthUrl = `${base}/api/oauth/${provider}/start?token=${token}${cleanupQs}`;
   return { userId, token, oauthUrl, created };
 }
 
@@ -36,25 +39,29 @@ const isCli = import.meta.url === `file://${process.argv[1]}`;
 if (isCli) {
   const args = process.argv.slice(2);
   const cleanup = args.includes("--cleanup");
+  const yahoo = args.includes("--yahoo");
   const email = args.find((a) => !a.startsWith("--"));
 
   if (!email) {
-    console.error("usage: pnpm run create-user -- <email> [--cleanup]");
+    console.error("usage: pnpm run create-user -- <email> [--cleanup] [--yahoo]");
     process.exit(1);
   }
 
   try {
-    const { userId, token, oauthUrl, created } = await createUser(email, { cleanup });
+    const { userId, token, oauthUrl, created } = await createUser(email, {
+      cleanup,
+      provider: yahoo ? "yahoo" : "google",
+    });
     console.error(
       created ? `Created user: ${email} (${userId})` : `User already exists: ${email} (${userId})`,
     );
     console.error("JWT (7-day expiry):");
     process.stdout.write(`${token}\n`);
     console.error("");
-    console.error("Connect Gmail:");
+    console.error(`Connect ${yahoo ? "Yahoo Mail" : "Gmail"}:`);
     console.error(`  ${oauthUrl}`);
     if (cleanup) {
-      console.error("  (requests gmail.modify — required for /api/cleanup)");
+      console.error("  (requests write scope — required for /api/cleanup)");
       console.error("  (set ENABLE_INBOX_CLEANUP=true in the server env)");
     }
   } finally {

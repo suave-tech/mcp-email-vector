@@ -1,5 +1,7 @@
 import { GmailProvider } from "./gmail.js";
+import { makeImapProvider } from "./imap.js";
 import { OutlookProvider } from "./outlook.js";
+import { YAHOO_PRESET } from "./presets.js";
 import type { EmailProvider, Provider } from "./types.js";
 
 // Gmail is the only fully-wired provider today. The Outlook adapter exists
@@ -17,7 +19,9 @@ export function providerFor(p: Provider): EmailProvider {
       return GmailProvider;
     case "outlook":
       return OutlookProvider;
+    case "yahoo":
+      return makeImapProvider(YAHOO_PRESET);
     case "imap":
-      throw new Error("imap provider not yet implemented — see CONTRIBUTING.md");
+      throw new Error("generic imap requires a per-account preset lookup — not yet wired");
   }
 }

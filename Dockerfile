@@ -22,6 +22,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY src/db/schema.sql ./src/db/schema.sql
+# migrate.ts resolves migrations relative to its own file location. tsc doesn't
+# emit .sql files, so copy them into the same place the compiled migrate.js
+# will look them up.
+COPY src/db/migrations ./dist/db/migrations
 USER node
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/index.js"]
