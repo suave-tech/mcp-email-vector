@@ -37,7 +37,11 @@ export const worker = new Worker<SyncJobPayload>(
       throw err;
     }
   },
-  { connection, concurrency: 4 },
+  {
+    connection,
+    concurrency: 1,
+    lockDuration: 10 * 60 * 1000,
+  },
 );
 
 worker.on("failed", (job, err) => {

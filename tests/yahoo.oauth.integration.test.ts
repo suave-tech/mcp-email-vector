@@ -126,8 +126,8 @@ describe("GET /api/oauth/yahoo/start", () => {
       });
       const location = res.headers.get("location") ?? "";
       const params = new URLSearchParams(location.split("?")[1] ?? "");
-      // env.ENABLE_INBOX_CLEANUP was false at module load → mail-w is NOT added.
-      // This asserts the deployment-level gate, not the user-level one.
+      // setup.ts sets ENABLE_INBOX_CLEANUP=false so env is locked in as false at
+      // module load even if .env has it true. Verifies the deployment-level gate.
       expect(params.get("scope") ?? "").not.toContain("mail-w");
     } finally {
       await close();

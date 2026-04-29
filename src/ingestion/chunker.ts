@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { MAX_EMAIL_TOKENS } from "../config/constants.js";
 import type { NormalizedEmail } from "../providers/types.js";
 
-// Rough 4-chars-per-token heuristic — fine for truncation guardrail, not for billing.
-const CHAR_BUDGET = MAX_EMAIL_TOKENS * 4;
+// Conservative 3-chars-per-token heuristic — safer than 4 for content with
+// URLs, Unicode, or dense punctuation. Not for billing, just a hard guardrail.
+const CHAR_BUDGET = MAX_EMAIL_TOKENS * 3;
 
 export function buildEmbeddingText(email: NormalizedEmail): string {
   const header =

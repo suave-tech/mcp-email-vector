@@ -9,7 +9,8 @@ export const EXCLUDED_OUTLOOK_FOLDERS = ["Junk Email"] as const;
 export const EMBEDDING_DIMENSIONS = 1536;
 
 // Max tokens per embedded email (truncate if exceeded).
-export const MAX_EMAIL_TOKENS = 8192;
+// Set below the model hard-limit (8192) to absorb heuristic rounding error.
+export const MAX_EMAIL_TOKENS = 7500;
 
 // Poll cadence per account.
 export const POLL_INTERVAL_MS = 60 * 60 * 1000;

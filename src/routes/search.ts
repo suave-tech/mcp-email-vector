@@ -20,7 +20,7 @@ const body = z.object({
   answer: z.boolean().optional(),
 });
 
-searchRouter.post("/", requireAuth, async (req, res) => {
+searchRouter.post("/", requireAuth, async (req, res, next) => {
   const parsed = body.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_body", details: parsed.error.flatten() });
@@ -28,14 +28,18 @@ searchRouter.post("/", requireAuth, async (req, res) => {
   }
   const userId = getUserId(req);
   metrics.searchRequests.inc();
-  const hits = await search({
-    userId,
-    query: parsed.data.query,
-    accountIds: parsed.data.account_ids,
-    dateFrom: parsed.data.date_from,
-    dateTo: parsed.data.date_to,
-    topK: parsed.data.top_k,
-  });
-  const grounded = parsed.data.answer ? await answer(parsed.data.query, hits) : undefined;
-  res.json({ hits, answer: grounded });
+  try {
+    const hits = await search({
+      userId,
+      query: parsed.data.query,
+      accountIds: parsed.data.account_ids,
+      dateFrom: parsed.data.date_from,
+      dateTo: parsed.data.date_to,
+      topK: parsed.data.top_k,
+    });
+    const grounded = parsed.data.answer ? await answer(parsed.data.query, hits) : undefined;
+    res.json({ hits, answer: grounded });
+  } catch (err) {
+    next(err);
+  }
 });

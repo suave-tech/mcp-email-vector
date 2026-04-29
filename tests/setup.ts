@@ -28,3 +28,10 @@ process.env.MS_CLIENT_ID = "ms-test";
 process.env.MS_CLIENT_SECRET = "ms-secret";
 process.env.MS_TENANT_ID = "common";
 process.env.MS_REDIRECT_URI = "http://localhost:3000/api/oauth/microsoft/callback";
+
+// These override whatever a developer's .env may contain so test behaviour is
+// stable regardless of local setup.
+process.env.ENABLE_INBOX_CLEANUP = "false";
+process.env.YAHOO_CLIENT_ID = "yahoo-test";
+process.env.YAHOO_CLIENT_SECRET = "yahoo-secret-test";
+process.env.YAHOO_REDIRECT_URI = "http://localhost:3000/api/oauth/yahoo/callback";

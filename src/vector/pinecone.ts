@@ -15,6 +15,7 @@ export interface EmailVectorMetadata {
   recipients: string[];
   subject: string;
   date: string;
+  date_ts: number; // Unix epoch seconds — used for $gte/$lte range filters (Pinecone requires numbers)
   provider: string;
   has_attachments: boolean;
   labels: string[];
@@ -55,10 +56,10 @@ export async function queryEmailVectors(opts: QueryOptions) {
   if (opts.messageIds?.length) filter.message_id = { $in: opts.messageIds };
   if (opts.senderEmail) filter.sender_email = { $eq: opts.senderEmail };
   if (opts.dateFrom || opts.dateTo) {
-    const range: Record<string, string> = {};
-    if (opts.dateFrom) range.$gte = opts.dateFrom;
-    if (opts.dateTo) range.$lte = opts.dateTo;
-    filter.date = range;
+    const range: Record<string, number> = {};
+    if (opts.dateFrom) range.$gte = Math.floor(new Date(opts.dateFrom).getTime() / 1000);
+    if (opts.dateTo) range.$lte = Math.floor(new Date(opts.dateTo).getTime() / 1000);
+    filter.date_ts = range;
   }
 
   return index.namespace(namespaceFor(opts.userId)).query({

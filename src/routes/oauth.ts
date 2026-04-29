@@ -15,7 +15,7 @@ import { syncQueue } from "../queue/queue.js";
 export const oauthRouter: Router = Router();
 
 const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
-const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+export const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const USERINFO_SCOPE = "https://www.googleapis.com/auth/userinfo.email";
 
 function gmailScopes(cleanup: boolean): string[] {
@@ -23,6 +23,30 @@ function gmailScopes(cleanup: boolean): string[] {
   // Only request it when the deployment enables cleanup AND the user opts in.
   const mail = cleanup && env.ENABLE_INBOX_CLEANUP ? GMAIL_MODIFY_SCOPE : GMAIL_READ_SCOPE;
   return [mail, USERINFO_SCOPE];
+}
+
+export function buildGoogleAuthUrl(userId: string, cleanup: boolean): string {
+  const state = JSON.stringify({ u: userId, c: cleanup });
+  return oauthClient().generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: gmailScopes(cleanup),
+    state,
+  });
+}
+
+export function buildYahooAuthUrl(userId: string, cleanup: boolean): string {
+  const scopes = yahooScopes(cleanup);
+  const state = JSON.stringify({ u: userId, c: cleanup });
+  const params = new URLSearchParams({
+    client_id: env.YAHOO_CLIENT_ID!,
+    redirect_uri: env.YAHOO_REDIRECT_URI!,
+    response_type: "code",
+    scope: scopes.join(" "),
+    state,
+    nonce: randomBytes(16).toString("hex"),
+  });
+  return `${YAHOO_PRESET.oauth.authEndpoint}?${params.toString()}`;
 }
 
 // Browser navigation can't set an Authorization header, so accept a one-shot
@@ -48,17 +72,7 @@ function authFromHeaderOrQuery(req: Request, res: Response, next: NextFunction):
 
 oauthRouter.get("/google/start", authFromHeaderOrQuery, (req, res) => {
   const cleanup = req.query.cleanup === "true" || req.query.cleanup === "1";
-  const scopes = gmailScopes(cleanup);
-  // Pipe-encode the cleanup intent through `state` so the callback knows which
-  // scope set was granted without a separate session store.
-  const state = JSON.stringify({ u: getUserId(req), c: cleanup });
-  const url = oauthClient().generateAuthUrl({
-    access_type: "offline",
-    prompt: "consent",
-    scope: scopes,
-    state,
-  });
-  res.redirect(url);
+  res.redirect(buildGoogleAuthUrl(getUserId(req), cleanup));
 });
 
 oauthRouter.get("/google/callback", async (req, res) => {
@@ -101,6 +115,7 @@ oauthRouter.get("/google/callback", async (req, res) => {
        SET access_token = EXCLUDED.access_token,
            refresh_token = EXCLUDED.refresh_token,
            token_expires_at = EXCLUDED.token_expires_at,
+           scopes_granted = EXCLUDED.scopes_granted,
            is_active = true,
            needs_reauth = false
      RETURNING id`,
@@ -142,19 +157,7 @@ function assertYahooConfigured(res: Response): boolean {
 oauthRouter.get("/yahoo/start", authFromHeaderOrQuery, (req, res) => {
   if (!assertYahooConfigured(res)) return;
   const cleanup = req.query.cleanup === "true" || req.query.cleanup === "1";
-  const scopes = yahooScopes(cleanup);
-  const state = JSON.stringify({ u: getUserId(req), c: cleanup });
-  // Yahoo's authorization endpoint: space-separated scopes, nonce required
-  // when the `openid` scope is requested. URL-encoded.
-  const params = new URLSearchParams({
-    client_id: env.YAHOO_CLIENT_ID!,
-    redirect_uri: env.YAHOO_REDIRECT_URI!,
-    response_type: "code",
-    scope: scopes.join(" "),
-    state,
-    nonce: randomBytes(16).toString("hex"),
-  });
-  res.redirect(`${YAHOO_PRESET.oauth.authEndpoint}?${params.toString()}`);
+  res.redirect(buildYahooAuthUrl(getUserId(req), cleanup));
 });
 
 interface YahooTokenResponse {

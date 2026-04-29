@@ -35,7 +35,6 @@ export async function syncAccount(
   if (!acct) throw new Error("account_not_found");
 
   const provider = providerFor(acct.provider);
-  const accessToken = await ensureFreshToken(acct);
 
   const since = acct.last_synced ? new Date(acct.last_synced) : undefined;
   let pageToken: string | undefined;
@@ -49,6 +48,14 @@ export async function syncAccount(
       log.warn({ accountId }, "quota exhausted — stopping sync");
       break;
     }
+
+    // Re-read the account row so we always have the latest token data (a
+    // previous page may have triggered a refresh that updated the DB).
+    const [freshAcct] = await query<AccountRow>("SELECT * FROM accounts WHERE id = $1 AND is_active = true", [
+      accountId,
+    ]);
+    if (!freshAcct) throw new Error("account_not_found");
+    const accessToken = await ensureFreshToken(freshAcct);
 
     const result = await provider.fetchPage(accessToken, {
       since,
@@ -115,12 +122,14 @@ async function processBatch(acct: AccountRow, emails: NormalizedEmail[], log: Lo
         user_id: acct.user_id,
         account_id: acct.id,
         message_id: t.email.messageId,
-        thread_id: t.email.threadId,
+        // Pinecone rejects null metadata values — coerce nullables to safe defaults.
+        thread_id: t.email.threadId ?? "",
         sender_email: t.email.senderEmail,
-        sender_name: t.email.senderName,
+        sender_name: t.email.senderName ?? "",
         recipients: t.email.recipients,
         subject: t.email.subject,
         date: t.email.date,
+        date_ts: Math.floor(new Date(t.email.date).getTime() / 1000),
         provider: acct.provider,
         has_attachments: t.email.hasAttachments,
         labels: t.email.labels,

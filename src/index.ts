@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import cors from "cors";
 import express from "express";
 import pinoHttp from "pino-http";
 import { env } from "./config/env.js";
@@ -6,10 +7,27 @@ import { logger } from "./logger.js";
 import { metrics, renderPrometheus } from "./metrics.js";
 import { accountsRouter } from "./routes/accounts.js";
 import { cleanupRouter } from "./routes/cleanup.js";
+import { installRouter } from "./routes/install.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { searchRouter } from "./routes/search.js";
+import { whoamiRouter } from "./routes/whoami.js";
 
 const app = express();
+
+// Allow Chrome extensions and localhost origins to call the API with Authorization headers.
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin || origin.startsWith("chrome-extension://") || origin.startsWith("http://localhost")) {
+        cb(null, true);
+      } else {
+        cb(new Error("CORS: origin not allowed"));
+      }
+    },
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
 app.use(express.json({ limit: "1mb" }));
 
 // Attach a request ID + child logger to every request. Handlers pull it off
@@ -81,6 +99,8 @@ app.get("/accounts", (req, res) => {
 app.use("/api/oauth", oauthRouter);
 app.use("/api/accounts", accountsRouter);
 app.use("/api/search", searchRouter);
+app.use("/api/whoami", whoamiRouter);
+app.use("/api/extension/install", installRouter);
 if (env.ENABLE_INBOX_CLEANUP) {
   app.use("/api/cleanup", cleanupRouter);
   logger.info("inbox cleanup enabled (/api/cleanup)");

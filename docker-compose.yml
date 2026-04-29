@@ -29,6 +29,7 @@ services:
     build: .
     env_file: .env
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgres://user:pass@postgres:5432/vector_email
     depends_on:
       postgres:
@@ -40,6 +41,7 @@ services:
     build: .
     env_file: .env
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgres://user:pass@postgres:5432/vector_email
       REDIS_URL: redis://redis:6379
     ports:
@@ -55,8 +57,12 @@ services:
     build: .
     env_file: .env
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgres://user:pass@postgres:5432/vector_email
       REDIS_URL: redis://redis:6379
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -68,8 +74,12 @@ services:
     build: .
     env_file: .env
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgres://user:pass@postgres:5432/vector_email
       REDIS_URL: redis://redis:6379
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -105,20 +105,34 @@ export const GmailProvider: EmailProvider = {
     if (opts.since) qParts.push(`after:${Math.floor(opts.since.getTime() / 1000)}`);
     const q = qParts.join(" ");
 
-    const list = await gmail.users.messages.list({
-      userId: "me",
-      q,
-      maxResults: opts.limit ?? 100,
-      pageToken: opts.pageToken,
-    });
+    const list = await gmail.users.messages
+      .list({
+        userId: "me",
+        q,
+        maxResults: opts.limit ?? 100,
+        pageToken: opts.pageToken,
+      })
+      .catch((err: Error & { code?: number }) => {
+        if (err.code === 429) throw new Error(`Gmail rate limit — ${err.message}`);
+        throw err;
+      });
 
     const ids = list.data.messages ?? [];
     const emails: NormalizedEmail[] = [];
     for (const { id } of ids) {
       if (!id) continue;
-      const { data } = await gmail.users.messages.get({ userId: "me", id, format: "full" });
-      const norm = normalize(data);
-      if (norm) emails.push(norm);
+      try {
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`message fetch timeout: ${id}`)), 15_000),
+        );
+        const fetch = gmail.users.messages.get({ userId: "me", id, format: "full" });
+        const { data } = await Promise.race([fetch, timeout]);
+        const norm = normalize(data);
+        if (norm) emails.push(norm);
+      } catch (err) {
+        // Skip malformed or timed-out messages so one bad email can't stall the whole page.
+        console.warn(`skipping message ${id}:`, (err as Error).message);
+      }
     }
 
     return { emails, nextPageToken: list.data.nextPageToken ?? undefined };
@@ -173,7 +187,7 @@ function normalize(
     recipients: to,
     subject: headers.get("subject") ?? "",
     bodyText,
-    date: date ? new Date(date).toISOString() : new Date().toISOString(),
+    date: date ? safeDateIso(date) : new Date().toISOString(),
     labels,
     hasAttachments: hasAttachments(msg.payload),
   };
@@ -200,6 +214,17 @@ function hasAttachments(part: any): boolean {
   if (!part) return false;
   if (part.filename && part.body?.attachmentId) return true;
   return (part.parts ?? []).some(hasAttachments);
+}
+
+/** Parse a raw RFC 2822 date string, falling back to now() if it's malformed or out of range. */
+function safeDateIso(raw: string): string {
+  try {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return new Date().toISOString();
+    return d.toISOString(); // throws RangeError for years outside ±275760
+  } catch {
+    return new Date().toISOString();
+  }
 }
 
 function parseAddress(raw: string): { name: string | null; email: string } {

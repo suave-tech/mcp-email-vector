@@ -119,23 +119,30 @@ const checks: Check[] = [
   },
 ];
 
-let failed = 0;
-for (const check of checks) {
-  try {
-    const detail = await check.run();
-    console.log(`  ok   ${check.name} — ${detail}`);
-  } catch (err) {
-    failed++;
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log(`  FAIL ${check.name} — ${msg}`);
+async function main(): Promise<void> {
+  let failed = 0;
+  for (const check of checks) {
+    try {
+      const detail = await check.run();
+      console.log(`  ok   ${check.name} — ${detail}`);
+    } catch (err) {
+      failed++;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`  FAIL ${check.name} — ${msg}`);
+    }
   }
+
+  await pool.end();
+
+  console.log("");
+  if (failed > 0) {
+    console.log(`${failed} check(s) failed.`);
+    process.exit(1);
+  }
+  console.log("All checks passed. Ready to connect an account.");
 }
 
-await pool.end();
-
-console.log("");
-if (failed > 0) {
-  console.log(`${failed} check(s) failed.`);
+main().catch((err) => {
+  console.error(err);
   process.exit(1);
-}
-console.log("All checks passed. Ready to connect an account.");
+});

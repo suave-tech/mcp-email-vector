@@ -37,34 +37,44 @@ export async function createUser(
 // The wizard imports createUser() directly instead of spawning tsx.
 const isCli = import.meta.url === `file://${process.argv[1]}`;
 if (isCli) {
-  const args = process.argv.slice(2);
-  const cleanup = args.includes("--cleanup");
-  const yahoo = args.includes("--yahoo");
-  const email = args.find((a) => !a.startsWith("--"));
+  (async () => {
+    const args = process.argv.slice(2);
+    const cleanup = args.includes("--cleanup");
+    const yahoo = args.includes("--yahoo");
+    const email = args.find((a) => !a.startsWith("--"));
 
-  if (!email) {
-    console.error("usage: pnpm run create-user -- <email> [--cleanup] [--yahoo]");
-    process.exit(1);
-  }
-
-  try {
-    const { userId, token, oauthUrl, created } = await createUser(email, {
-      cleanup,
-      provider: yahoo ? "yahoo" : "google",
-    });
-    console.error(
-      created ? `Created user: ${email} (${userId})` : `User already exists: ${email} (${userId})`,
-    );
-    console.error("JWT (7-day expiry):");
-    process.stdout.write(`${token}\n`);
-    console.error("");
-    console.error(`Connect ${yahoo ? "Yahoo Mail" : "Gmail"}:`);
-    console.error(`  ${oauthUrl}`);
-    if (cleanup) {
-      console.error("  (requests write scope — required for /api/cleanup)");
-      console.error("  (set ENABLE_INBOX_CLEANUP=true in the server env)");
+    if (!email) {
+      console.error("usage: pnpm run create-user -- <email> [--cleanup] [--yahoo]");
+      process.exit(1);
     }
-  } finally {
-    await pool.end();
-  }
+
+    try {
+      const { userId, token, oauthUrl, created } = await createUser(email, {
+        cleanup,
+        provider: yahoo ? "yahoo" : "google",
+      });
+      const base = process.env.API_URL ?? "http://localhost:3000";
+      const installUrl = `${base}/api/extension/install#t=${token}`;
+      console.error(
+        created ? `Created user: ${email} (${userId})` : `User already exists: ${email} (${userId})`,
+      );
+      console.error("");
+      console.error("── Chrome extension ─────────────────────────────────────");
+      console.error("Open this link in Chrome (extension must be loaded first):");
+      console.error(`  ${installUrl}`);
+      console.error("");
+      console.error("── Connect mailbox ──────────────────────────────────────");
+      console.error(`Connect ${yahoo ? "Yahoo Mail" : "Gmail"}:`);
+      console.error(`  ${oauthUrl}`);
+      if (cleanup) {
+        console.error("  (requests write scope — required for /api/cleanup)");
+        console.error("  (set ENABLE_INBOX_CLEANUP=true in the server env)");
+      }
+    } finally {
+      await pool.end();
+    }
+  })().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
